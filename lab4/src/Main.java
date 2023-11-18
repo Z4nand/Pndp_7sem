@@ -13,17 +13,13 @@
 //желательно CountDownLatch. Работоспособность программы должна быть продемонстрирована на большом проекте с GitHub,
 //например, Spring Framework.
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,7 +31,7 @@ public class Main {
 
         long startTime = System.currentTimeMillis();
 
-        List<String> listJavaFile = searchJavaFiles("/home/zanand/Study/JavaFolder/pndp/spring-framework");
+        List<String> listJavaFile = searchJavaFiles("/home/zanand/Study/JavaFolder/pndp/Pndp_7sem/lab2");
         printer(clsHandler(listJavaFile));
 
 
@@ -64,70 +60,50 @@ public class Main {
 
     //3 Обработка
 
-    public static  Map<String, List<String>> clsHandler(List<String> listJavaFile) throws IOException, InterruptedException {
-
-        List<String> listSelections = new ArrayList<>(); // создаем массив для хранения выборочных данных
-
+    public static Map<String, List<String>> clsHandler(List<String> listJavaFile) throws IOException {
+        Map<String, List<String>> parent_children = new HashMap<>(); // создаем map для хранения родителя и его детей
         Pattern pattern_full = Pattern.compile("(\\binterface\\s\\w+\\s\\bextends\\s[\\w, ]+\\b)|(\\bclass\\s\\w+\\s\\bextends\\s\\w+\\b)");
 
-// Создаем счетчик потоков
         CountDownLatch latch = new CountDownLatch(listJavaFile.size());
-        Lock lock = new ReentrantLock(); //синхронизация потоков
+
+        System.out.printf("Всего в листе Java файлов: "+String.valueOf(listJavaFile.size())+"\n");
+
+        AtomicInteger n= new AtomicInteger();
 
         for (String i : listJavaFile) {
             Thread thread = new Thread(() -> {
-                String text = null;
                 try {
-                    text = readFromFile(i);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
 
-                Matcher matcher = pattern_full.matcher(text);
-                while (matcher.find()) {
-
-                    lock.lock();
-                    try {
-                        listSelections.add(matcher.group());
-                    } finally {
-                        lock.unlock();
+                    String text = readFromFile(i);
+                    Matcher matcher = pattern_full.matcher(text);
+                    while (matcher.find()) {
+                        String line = matcher.group();
+                        String[] parts = line.split("\\s");
+                        String className = parts[1];
+                        String parentName = parts[parts.length - 1];
+                        synchronized (parent_children) {
+                            List<String> childClasses = parent_children.getOrDefault(parentName, new ArrayList<>());
+                            childClasses.add(className);
+                            parent_children.put(parentName, childClasses);
+                        }
                     }
-
-                }
-                latch.countDown(); // минусуем потоки, когда они отработали
-            });
-            thread.start();
-        }
-
-        latch.await(); // ждем, пока все потоки завершат свою работу
-
-
-        Map<String, List<String>> parent_children = new HashMap<>();
-
-
-        for (String line : listSelections) {
-            Thread thread = new Thread(() -> {
-                String[] parts = line.split("\\s");
-                String className = parts[1];
-                String parentName = parts[parts.length - 1];
-                List<String> childClasses = parent_children.getOrDefault(parentName, new ArrayList<>());
-
-                lock.lock();
-                try {
-                    childClasses.add(className);
-
-                    parent_children.put(parentName, childClasses);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 } finally {
-                    lock.unlock();
+                    n.getAndIncrement();
+                    latch.countDown();
                 }
 
-
-                latch.countDown();
             });
             thread.start();
         }
-        latch.await();
 
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.printf("Счётчик: "+String.valueOf(n.get())+"\n");
         return parent_children;
     }
 
