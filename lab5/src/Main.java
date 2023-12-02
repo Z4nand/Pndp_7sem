@@ -57,11 +57,10 @@ public class Main {
         Pattern pattern_full = Pattern.compile("(\\binterface\\s\\w+\\s\\bextends\\s[\\w, ]+\\b)|(\\bclass\\s\\w+\\s\\bextends\\s\\w+\\b)");
 
         ExecutorService executorService = Executors.newFixedThreadPool(8); // Создаем ExecutorService с ограниченным количеством потоков
-        List<Future<Void>> futures = new ArrayList<>();
-
+        List<Future<Map<String, List<String>>>> futures = new ArrayList<>();
 
         for (String i : listJavaFile) {
-            Future<Void> future = executorService.submit(() -> {
+            Future<Map<String, List<String>>> future = executorService.submit(() -> { //
                 try {
                     String text = readFromFile(i);
                     Matcher matcher = pattern_full.matcher(text);
@@ -70,21 +69,21 @@ public class Main {
                         String[] parts = line.split("\\s");
                         String className = parts[1];
                         String parentName = parts[parts.length - 1];
-                        synchronized (parent_children) {
-                            List<String> childClasses = parent_children.getOrDefault(parentName, new ArrayList<>());
-                            childClasses.add(className);
-                            parent_children.put(parentName, childClasses);
-                        }
+
+                        List<String> childClasses = parent_children.getOrDefault(parentName, new ArrayList<>());
+                        childClasses.add(className);
+                        parent_children.put(parentName, childClasses);
+
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                return null;
+                return parent_children; // Возвращаем заполненную Map
             });
             futures.add(future);
         }
 
-        for (Future<Void> future : futures) {
+        for (Future<Map<String, List<String>>> future : futures) { //
             try {
                 future.get(); // ждем завершения всех потоков
             } catch (ExecutionException e) {
@@ -93,7 +92,6 @@ public class Main {
         }
 
         executorService.shutdown(); // завершаем ExecutorService
-
         return parent_children;
     }
 
