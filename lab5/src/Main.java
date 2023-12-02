@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
-
 public class Main {
     public static void main(String[] args) throws IOException, InterruptedException {
 
@@ -53,15 +52,16 @@ public class Main {
 
     // 3 Обработка
     public static Map<String, List<String>> clsHandler(List<String> listJavaFile) throws IOException, InterruptedException {
-        Map<String, List<String>> parent_children = new HashMap<>(); // создаем map для хранения родителя и его детей
+
         Pattern pattern_full = Pattern.compile("(\\binterface\\s\\w+\\s\\bextends\\s[\\w, ]+\\b)|(\\bclass\\s\\w+\\s\\bextends\\s\\w+\\b)");
+        ExecutorService executorService = Executors.newFixedThreadPool(8);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(8); // Создаем ExecutorService с ограниченным количеством потоков
         List<Future<Map<String, List<String>>>> futures = new ArrayList<>();
-
         for (String i : listJavaFile) {
-            Future<Map<String, List<String>>> future = executorService.submit(() -> { //
+            Callable<Map<String, List<String>>> fun = () -> { //
+                Map<String, List<String>> classes = new HashMap();
                 try {
+
                     String text = readFromFile(i);
                     Matcher matcher = pattern_full.matcher(text);
                     while (matcher.find()) {
@@ -69,41 +69,54 @@ public class Main {
                         String[] parts = line.split("\\s");
                         String className = parts[1];
                         String parentName = parts[parts.length - 1];
-
-                        List<String> childClasses = parent_children.getOrDefault(parentName, new ArrayList<>());
+                        List<String> childClasses = classes.getOrDefault(parentName, new ArrayList<>());
                         childClasses.add(className);
-                        parent_children.put(parentName, childClasses);
-
+                        classes.put(parentName, childClasses);
                     }
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                return parent_children; // Возвращаем заполненную Map
-            });
+                return classes;
+            };
+            Future<Map<String, List<String>>> future = executorService.submit(fun);
             futures.add(future);
         }
 
-        for (Future<Map<String, List<String>>> future : futures) { //
+        Map<String, List<String>> parent_children = new HashMap<>();
+
+        for (Future<Map<String, List<String>>> future : futures) {
             try {
-                future.get(); // ждем завершения всех потоков
-            } catch (ExecutionException e) {
+                parent_children.putAll(future.get());
+                
+            } catch (
+                    ExecutionException e) {
                 e.printStackTrace();
             }
+
+        }
+//        Map<String, List<String>> result = future.get();
+//        for (String key : result.keySet()) {
+//            if (parent_children.containsKey(key)) {
+//                List<String> children = parent_children.get(key);
+//                children.addAll(result.get(key));
+//                parent_children.put(key, children);
+//            } else {
+//                parent_children.put(key, result.get(key));
+//            }
+            executorService.shutdown();
+            return parent_children;
         }
 
-        executorService.shutdown(); // завершаем ExecutorService
-        return parent_children;
-    }
-
-    // 4 print
-    public static void printer(Map<String, List<String>> parent_children) throws IOException {
-        for (Map.Entry<String, List<String>> entry : parent_children.entrySet()) {
-            String parentClass = entry.getKey();
-            List<String> childClasses = entry.getValue();
-            System.out.println(parentClass + ": " + childClasses.toString());
+        // 4 print
+        public static void printer (Map < String, List < String >> parent_children) throws IOException {
+            for (Map.Entry<String, List<String>> entry : parent_children.entrySet()) {
+                String parentClass = entry.getKey();
+                List<String> childClasses = entry.getValue();
+                System.out.println(parentClass + ": " + childClasses.toString());
+            }
         }
     }
-}
 
 
 
