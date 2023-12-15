@@ -87,14 +87,24 @@ public class Main {
 
         for (Future<Map<String, List<String>>> future : futures) {
             try {
-                parent_children.putAll(future.get());
-                
+                Map<String, List<String>> result = future.get();
+                for (String key : result.keySet()) {
+                    List<String> children = parent_children.getOrDefault(key, new ArrayList<>());
+                    children.addAll(result.get(key));
+                    parent_children.put(key, children);
+                }
+
+
             } catch (
                     ExecutionException e) {
                 e.printStackTrace();
             }
 
         }
+//                future.get().forEach((k, v) -> {
+//                    parent_children.put(k, parent_children.getOrDefault(k, new ArrayList<>() ).addAll(v));
+//                });
+
 //        Map<String, List<String>> result = future.get();
 //        for (String key : result.keySet()) {
 //            if (parent_children.containsKey(key)) {
@@ -104,19 +114,19 @@ public class Main {
 //            } else {
 //                parent_children.put(key, result.get(key));
 //            }
-            executorService.shutdown();
-            return parent_children;
-        }
+        executorService.shutdown();
+        return parent_children;
+    }
 
-        // 4 print
-        public static void printer (Map < String, List < String >> parent_children) throws IOException {
-            for (Map.Entry<String, List<String>> entry : parent_children.entrySet()) {
-                String parentClass = entry.getKey();
-                List<String> childClasses = entry.getValue();
-                System.out.println(parentClass + ": " + childClasses.toString());
-            }
+    // 4 print
+    public static void printer(Map<String, List<String>> parent_children) throws IOException {
+        for (Map.Entry<String, List<String>> entry : parent_children.entrySet()) {
+            String parentClass = entry.getKey();
+            List<String> childClasses = entry.getValue();
+            System.out.println(parentClass + ": " + childClasses.toString());
         }
     }
+}
 
 
 
